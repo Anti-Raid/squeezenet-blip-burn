@@ -1,0 +1,14 @@
+[package]
+name = "squeezenet-blip-burn"
+version = "0.1.0"
+edition = "2021"
+authors = ["Joel <joel@assistifyai.org>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+squeezenet-burn = { git = "https://github.com/burn-rs/models", package = "squeezenet-burn", features = ["weights_embedded"], default-features = false }
+burn = { version = "0.11.1", features = ["ndarray"]  }
+image = { version = "0.24.7", features = ["png", "jpeg"] }
+serde = "1.0.197"
+serde_json = "1.0.114"
