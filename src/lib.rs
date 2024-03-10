@@ -1,22 +1,24 @@
-use squeezenet_burn::model::{label::LABELS, normalizer::Normalizer, squeezenet1::Model};
 use burn::backend::NdArray;
-use burn::tensor::{Tensor, activation::softmax};
+use burn::tensor::{activation::softmax, Tensor};
 use image::{self, GenericImageView, Pixel};
+use regex::Regex;
+pub use squeezenet_burn::model::{label::LABELS, normalizer::Normalizer, squeezenet1::Model};
+use std::collections::HashSet;
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct InferenceResult {
-    index: usize,
-    probability: f32,
-    label: String,
+    pub index: usize,
+    pub probability: f32,
+    pub label: String,
 }
-
 
 type Backend = NdArray<f32>;
 const HEIGHT: usize = 224;
 const WIDTH: usize = 224;
 
 pub fn parse_image(img_data: &[u8]) -> Vec<InferenceResult> {
-    let img = image::load_from_memory(img_data).unwrap_or_else(|_| panic!("Failed to load image from memory"));
+    let img = image::load_from_memory(img_data)
+        .unwrap_or_else(|_| panic!("Failed to load image from memory"));
 
     let resized_img = img.resize_exact(
         WIDTH as u32,
@@ -49,7 +51,7 @@ pub fn parse_image(img_data: &[u8]) -> Vec<InferenceResult> {
     let mut vec_probablities: Vec<_> = result.iter().enumerate().collect();
     vec_probablities.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap());
     vec_probablities.truncate(5);
-    
+
     let results: Vec<InferenceResult> = vec_probablities
         .iter()
         .map(|(idx, probablity)| InferenceResult {
@@ -61,18 +63,55 @@ pub fn parse_image(img_data: &[u8]) -> Vec<InferenceResult> {
     results
 }
 
+pub fn compare_results(generated: Vec<InferenceResult>, config: Vec<InferenceResult>) -> f32 {
+    let mut total_similarity = 0.0;
+    let re: Regex = Regex::new(r"\bn\d+\b").unwrap();
 
+    for gen in &generated {
+        for conf in &config {
+            if gen.label == conf.label {
+                if conf.probability <= gen.probability {
+                   total_similarity += 1.0;
+                } else {
+                    total_similarity += gen.probability;
+                }
+            } else {
+                let gen_label_no_commas = gen.label.replace(",", "");
+                let gen_label = re.replace_all(&gen_label_no_commas, "");
+                let gen_words: HashSet<_> = gen_label.split_whitespace().collect();
 
+                let conf_label_no_commas = conf.label.replace(",", "");
+                let conf_label = re.replace_all(&conf_label_no_commas, "");
+                let conf_words: HashSet<_> = conf_label.split_whitespace().collect();
+                let intersection = gen_words.intersection(&conf_words).count() as f32;
+                let union = gen_words.union(&conf_words).count() as f32;
+                let jaccard_similarity = intersection / union;
+
+                if jaccard_similarity > 0.0 {
+                    if conf.probability < gen.probability {
+                        total_similarity += jaccard_similarity;
+                    } else {
+                        total_similarity += jaccard_similarity * gen.probability;
+                    }
+                }
+            }
+        }
+    }
+
+    // Calculate the average similarity
+    total_similarity
+}
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_parse_image() {
-        let img_data = include_bytes!("../test.png");
-        let results = parse_image(img_data);
-        for result in results {
-            println!("Index: {}, Probability: {}, Label: {}", result.index, result.probability, result.label);
-        }
+        let img_data = include_bytes!("../image.jpg");
+        let compare_img = include_bytes!("../image.jpeg");
+        let mut results = parse_image(img_data);
+        let rrs = parse_image(compare_img);
+        let score = compare_results(results.clone(), rrs.clone());
+        println!("Score: {}", score);
     }
 }

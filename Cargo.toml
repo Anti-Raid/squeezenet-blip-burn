@@ -12,3 +12,4 @@ burn = { version = "0.11.1", features = ["ndarray"]  }
 image = { version = "0.24.7", features = ["png", "jpeg"] }
 serde = "1.0.197"
 serde_json = "1.0.114"
+regex = "1.10.3"
