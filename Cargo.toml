@@ -1,5 +1,5 @@
 [package]
-name = "squeezenet-blip-burn"
+name = "image-similarity"
 version = "0.1.0"
 edition = "2021"
 authors = ["Joel <joel@assistifyai.org>"]
